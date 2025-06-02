@@ -896,81 +896,82 @@ private function getProductInfoForPDF($productData)
         dol_syslog("FicheProductionHTMLToPDF: Recherche produit pour ligne commande ID: ".$productId, LOG_DEBUG);
     }
     
-    // ✅ SEULE STRATÉGIE : Chercher dans les lignes de commande
-    $sql = "SELECT cd.fk_product, cd.qty, p.ref, p.label, p.weight, cd.array_options
-            FROM ".MAIN_DB_PREFIX."commandedet cd
-            LEFT JOIN ".MAIN_DB_PREFIX."product p ON cd.fk_product = p.rowid
-            WHERE cd.rowid = ".intval($productId);
-    
-    $resql = $this->db->query($sql);
-    if ($resql && $this->db->num_rows($resql) > 0) {
-        $obj = $this->db->fetch_object($resql);
-        
-        if ($this->debug) {
-            dol_syslog("FicheProductionHTMLToPDF: Produit trouvé - ligne:".$productId." -> produit:".$obj->fk_product." -> ".$obj->label, LOG_DEBUG);
-        }
-        
-        $displayName = !empty($obj->label) ? $obj->label : $obj->ref;
-        
-        // Ajouter des infos supplémentaires des extrafields
-        $extraInfo = '';
-        if (!empty($obj->array_options)) {
-            $arrayOptions = json_decode($obj->array_options, true);
-            if (is_array($arrayOptions)) {
-                // Couleur
-                $color = '';
-                foreach (array('options_color', 'options_couleur') as $colorField) {
-                    if (isset($arrayOptions[$colorField]) && !empty($arrayOptions[$colorField])) {
-                        $color = $arrayOptions[$colorField];
-                        break;
-                    }
-                }
-                
-                // Dimensions
-                $length = '';
-                $width = '';
-                foreach (array('options_length', 'options_longueur', 'options_long') as $lengthField) {
-                    if (isset($arrayOptions[$lengthField]) && !empty($arrayOptions[$lengthField])) {
-                        $length = $arrayOptions[$lengthField];
-                        break;
-                    }
-                }
-                foreach (array('options_width', 'options_largeur', 'options_larg') as $widthField) {
-                    if (isset($arrayOptions[$widthField]) && !empty($arrayOptions[$widthField])) {
-                        $width = $arrayOptions[$widthField];
-                        break;
-                    }
-                }
-                
-                // Construire les infos supplémentaires
-                if (!empty($color)) {
-                    $extraInfo .= ' - '.$color;
-                }
-                if (!empty($length) && !empty($width)) {
-                    $extraInfo .= ' ('.$length.'×'.$width.')';
-                }
-            }
-        }
-        
-        return array(
-            'display' => $displayName . $extraInfo,
-            'ref' => $obj->ref,
-            'weight' => $obj->weight
-        );
-    }
+// ✅ CORRECTION COMPLÈTE : Remplacer le code problématique
+
+// ✅ SEULE STRATÉGIE : Chercher dans les lignes de commande (CORRIGÉ)
+$sql = "SELECT cd.fk_product, cd.qty, p.ref, p.label, p.weight
+        FROM ".MAIN_DB_PREFIX."commandedet cd
+        LEFT JOIN ".MAIN_DB_PREFIX."product p ON cd.fk_product = p.rowid
+        WHERE cd.rowid = ".intval($productId);
+
+$resql = $this->db->query($sql);
+if ($resql && $this->db->num_rows($resql) > 0) {
+    $obj = $this->db->fetch_object($resql);
     
     if ($this->debug) {
-        dol_syslog("FicheProductionHTMLToPDF: Ligne de commande non trouvée pour ID: ".$productId, LOG_WARNING);
+        dol_syslog("FicheProductionHTMLToPDF: Produit trouvé - ligne:".$productId." -> produit:".$obj->fk_product." -> ".$obj->label, LOG_DEBUG);
     }
     
-    // ✅ FALLBACK si la ligne de commande n'existe pas
+    $displayName = !empty($obj->label) ? $obj->label : $obj->ref;
+    
+    // ✅ CORRECTION : Récupérer les extrafields depuis la table séparée
+    $extraInfo = '';
+    $sqlExtra = "SELECT largeur, nombre, longueur, couleur, ref_ligne, description
+                 FROM ".MAIN_DB_PREFIX."commandedet_extrafields 
+                 WHERE fk_object = ".intval($productId);
+    
+    $resqlExtra = $this->db->query($sqlExtra);
+    if ($resqlExtra && $this->db->num_rows($resqlExtra) > 0) {
+        $objExtra = $this->db->fetch_object($resqlExtra);
+        
+        // Construire les infos supplémentaires
+        $color = !empty($objExtra->couleur) ? $objExtra->couleur : '';
+        $length = !empty($objExtra->longueur) ? $objExtra->longueur : '';
+        $width = !empty($objExtra->largeur) ? $objExtra->largeur : '';
+        
+        if (!empty($color)) {
+            $extraInfo .= ' - '.$color;
+        }
+        if (!empty($length) && !empty($width)) {
+            $extraInfo .= ' ('.$length.'×'.$width.')';
+        }
+        
+        if ($this->debug) {
+            dol_syslog("FicheProductionHTMLToPDF: Extrafields trouvés - couleur:".$color." dimensions:".$length."x".$width, LOG_DEBUG);
+        }
+    } else {
+        if ($this->debug) {
+            dol_syslog("FicheProductionHTMLToPDF: Pas d'extrafields pour ligne:".$productId, LOG_DEBUG);
+        }
+    }
+    
     return array(
-        'display' => isset($productData['name']) ? $productData['name'] : 'Ligne commande #'.$productId.' (non trouvée)',
-        'ref' => '',
-        'weight' => isset($productData['weight']) ? $productData['weight'] : 0
+        'display' => $displayName . $extraInfo,
+        'ref' => $obj->ref,
+        'weight' => $obj->weight,
+        // ✅ AJOUT : Informations supplémentaires pour debug
+        'line_id' => $productId,
+        'product_id' => $obj->fk_product,
+        'label' => $obj->label,
+        'qty' => $obj->qty
     );
 }
 
+if ($this->debug) {
+    dol_syslog("FicheProductionHTMLToPDF: Ligne de commande non trouvée pour ID: ".$productId, LOG_WARNING);
+}
+
+// ✅ FALLBACK si la ligne de commande n'existe pas
+return array(
+    'display' => isset($productData['name']) ? $productData['name'] : 'Ligne commande #'.$productId.' (non trouvée)',
+    'ref' => '',
+    'weight' => isset($productData['weight']) ? $productData['weight'] : 0,
+    'line_id' => $productId,
+    'product_id' => null,
+    'label' => '',
+    'qty' => 0
+);
+}
     /**
      * Convert HTML to PDF using DOMPDF
      *
@@ -978,29 +979,231 @@ private function getProductInfoForPDF($productData)
      * @param string $outputFile Output file path
      * @return int <0 if error, >0 if success
      */
-    private function convertWithDOMPDF($html, $outputFile)
-    {
-        try {
-            $dompdf = new \Dompdf\Dompdf();
-            $dompdf->loadHtml($html);
-            $dompdf->setPaper('A4', 'portrait');
-            $dompdf->render();
-            
-            $output = $dompdf->output();
-            file_put_contents($outputFile, $output);
-            
-            if ($this->debug) {
-                dol_syslog("FicheProductionHTMLToPDF: PDF generated with DOMPDF", LOG_DEBUG);
-            }
-            
-            return 1;
-            
-        } catch (Exception $e) {
-            $this->error = "DOMPDF error: " . $e->getMessage();
-            dol_syslog("FicheProductionHTMLToPDF DOMPDF: " . $e->getMessage(), LOG_ERR);
-            return -1;
+    /**
+ * ✅ CORRECTION : Méthode DOMPDF optimisée pour CSS complexe
+ */
+private function convertWithDOMPDF($html, $outputFile)
+{
+    try {
+        // ✅ CONFIGURATION OPTIMISÉE DOMPDF
+        $options = new \Dompdf\Options();
+        
+        // Activer les options importantes pour CSS
+        $options->set('isRemoteEnabled', false);        // Sécurité
+        $options->set('isHtml5ParserEnabled', true);    // Parser HTML5
+        $options->set('isPhpEnabled', false);           // Sécurité
+        $options->set('isFontSubsettingEnabled', true); // Optimisation polices
+        $options->set('defaultMediaType', 'print');     // Mode impression
+        $options->set('defaultPaperSize', 'A4');
+        $options->set('defaultPaperOrientation', 'portrait');
+        
+        // ✅ CRITIQUE : Options pour améliorer le rendu CSS
+        $options->set('enable_css_float', true);        // Activer les floats
+        $options->set('enable_html5_parser', true);     // Parser HTML5
+        
+        // Créer DOMPDF avec options
+        $dompdf = new \Dompdf\Dompdf($options);
+        
+        // ✅ NOUVEAU : Préprocesser le HTML pour DOMPDF
+        $processedHtml = $this->preprocessHTMLForDOMPDF($html);
+        
+        $dompdf->loadHtml($processedHtml);
+        $dompdf->setPaper('A4', 'portrait');
+        
+        // ✅ AJOUT : Debug de la taille avant rendu
+        if ($this->debug) {
+            dol_syslog("FicheProductionHTMLToPDF: HTML size before render: " . strlen($processedHtml), LOG_DEBUG);
         }
+        
+        $dompdf->render();
+        
+        $output = $dompdf->output();
+        
+        // ✅ VÉRIFICATION : Taille du PDF généré
+        if (strlen($output) < 1000) {
+            throw new Exception("PDF généré trop petit (" . strlen($output) . " bytes), probablement une erreur de rendu");
+        }
+        
+        file_put_contents($outputFile, $output);
+        
+        if ($this->debug) {
+            dol_syslog("FicheProductionHTMLToPDF: PDF generated with DOMPDF - Size: " . strlen($output) . " bytes", LOG_DEBUG);
+            
+            // ✅ DEBUGGING : Sauvegarder le HTML préprocessé
+            $debugFile = str_replace('.pdf', '-dompdf-debug.html', $outputFile);
+            file_put_contents($debugFile, $processedHtml);
+            dol_syslog("FicheProductionHTMLToPDF: Debug HTML saved: " . $debugFile, LOG_DEBUG);
+        }
+        
+        return 1;
+        
+    } catch (Exception $e) {
+        $this->error = "DOMPDF error: " . $e->getMessage();
+        dol_syslog("FicheProductionHTMLToPDF DOMPDF: " . $e->getMessage(), LOG_ERR);
+        return -1;
     }
+}
+
+/**
+ * ✅ NOUVEAU : Préprocesseur HTML spécifique DOMPDF
+ */
+private function preprocessHTMLForDOMPDF($html)
+{
+    if ($this->debug) {
+        dol_syslog("FicheProductionHTMLToPDF: Preprocessing HTML for DOMPDF compatibility", LOG_DEBUG);
+    }
+    
+    // ✅ CORRECTION 1 : Remplacer flexbox par des alternatives DOMPDF-friendly
+    
+    // Pattern 1: display: flex avec gap
+    $html = preg_replace(
+        '/display:\s*flex;\s*gap:\s*[\d\w\s]+;/i',
+        'display: block;',
+        $html
+    );
+    
+    // Pattern 2: justify-content: space-between
+    $html = preg_replace(
+        '/justify-content:\s*space-between;/i',
+        '',
+        $html
+    );
+    
+    // Pattern 3: align-items: center
+    $html = preg_replace(
+        '/align-items:\s*center;/i',
+        'vertical-align: middle;',
+        $html
+    );
+    
+    // ✅ CORRECTION 2 : Transformer flex en float/table selon le cas
+    
+    // Pour .summary-layout, .main-content, .verification-layout
+    $flexContainers = array(
+        'summary-layout',
+        'main-content', 
+        'verification-layout',
+        'header-flex',
+        'totals-content',
+        'colis-header-content'
+    );
+    
+    foreach ($flexContainers as $container) {
+        // Remplacer display: flex par overflow: hidden (pour clearfix)
+        $html = preg_replace(
+            '/<div class="' . $container . '"([^>]*)style="([^"]*?)display:\s*flex;([^"]*?)"/',
+            '<div class="' . $container . '"$1style="$2overflow: hidden; width: 100%;$3"',
+            $html
+        );
+        
+        // Si pas de style inline, ajouter dans une balise style
+        $html = preg_replace(
+            '/<div class="' . $container . '"(?![^>]*style=)/',
+            '<div class="' . $container . '" style="overflow: hidden; width: 100%;"',
+            $html
+        );
+    }
+    
+    // ✅ CORRECTION 3 : Flex columns en float/width
+    $flexColumns = array(
+        'left-column' => 'float: left; width: 38%; margin-right: 2%;',
+        'right-column' => 'float: right; width: 58%;',
+        'inventory-column' => 'float: left; width: 38%; margin-right: 2%;',
+        'colis-column' => 'float: right; width: 58%;',
+        'verification-column' => 'float: left; width: 30%; margin-right: 3%; box-sizing: border-box;'
+    );
+    
+    foreach ($flexColumns as $class => $style) {
+        // Remplacer ou ajouter le style
+        $html = preg_replace(
+            '/<div class="' . $class . '"([^>]*?)style="([^"]*?)"/',
+            '<div class="' . $class . '"$1style="$2 ' . $style . '"',
+            $html
+        );
+        
+        // Si pas de style, l'ajouter
+        $html = preg_replace(
+            '/<div class="' . $class . '"(?![^>]*style=)/',
+            '<div class="' . $class . '" style="' . $style . '"',
+            $html
+        );
+    }
+    
+    // ✅ CORRECTION 4 : Ajouter des clearfix après les containers flex
+    foreach ($flexContainers as $container) {
+        $html = str_replace(
+            '</div><!-- clearfix-' . $container . ' -->',
+            '</div><div style="clear: both; height: 0; overflow: hidden;"></div>',
+            $html
+        );
+        
+        // Ajouter clearfix après chaque container flex
+        $html = preg_replace(
+            '/(<div class="' . $container . '"[^>]*>.*?<\/div>)/s',
+            '$1<div style="clear: both; height: 0; overflow: hidden;"></div>',
+            $html
+        );
+    }
+    
+    // ✅ CORRECTION 5 : CSS supplémentaire pour DOMPDF
+    $additionalCSS = '
+    <style type="text/css">
+    /* DOMPDF Compatibility CSS */
+    * { box-sizing: border-box; }
+    
+    .summary-layout { overflow: hidden !important; width: 100% !important; }
+    .left-column { float: left !important; width: 38% !important; margin-right: 2% !important; }
+    .right-column { float: right !important; width: 58% !important; }
+    
+    .main-content { overflow: hidden !important; width: 100% !important; margin-bottom: 15px !important; }
+    .inventory-column { float: left !important; width: 38% !important; margin-right: 2% !important; }
+    .colis-column { float: right !important; width: 58% !important; }
+    
+    .verification-layout { overflow: hidden !important; width: 100% !important; }
+    .verification-column { 
+        float: left !important; 
+        width: 30% !important; 
+        margin-right: 3% !important; 
+        box-sizing: border-box !important;
+    }
+    .verification-column:last-child { margin-right: 0 !important; }
+    
+    .header-flex { overflow: hidden !important; width: 100% !important; }
+    .header-flex h1 { float: left !important; margin: 0 !important; }
+    .header-flex .status { float: right !important; margin-top: 2px !important; }
+    
+    .totals-content { text-align: center !important; width: 100% !important; }
+    .total-item { display: inline-block !important; margin: 0 20px !important; }
+    
+    .colis-header-content { overflow: hidden !important; width: 100% !important; }
+    .colis-header-left { float: left !important; }
+    .colis-header-right { float: right !important; }
+    
+    /* Clearfix universel */
+    .summary-layout:after,
+    .main-content:after,
+    .verification-layout:after,
+    .header-flex:after,
+    .colis-header-content:after {
+        content: "";
+        display: table;
+        clear: both;
+    }
+    
+    /* Force des largeurs pour éviter les débordements */
+    body { width: 100% !important; margin: 0 !important; padding: 15mm !important; }
+    .pdf-page { width: 100% !important; max-width: none !important; }
+    </style>';
+    
+    // Injecter le CSS juste après <head>
+    $html = str_replace('<head>', '<head>' . $additionalCSS, $html);
+    
+    if ($this->debug) {
+        dol_syslog("FicheProductionHTMLToPDF: HTML preprocessed for DOMPDF - new size: " . strlen($html), LOG_DEBUG);
+    }
+    
+    return $html;
+}
     
     /**
      * Convert HTML to PDF using TCPDF
