@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fiche de Production - {{COMMANDE_REF}}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 15mm;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: white;
+            line-height: 1.2;
+            font-size: 12px;
+            color: #333;
+        }
+        
+        .pdf-page {
+            width: 100%;
+            max-width: 794px;
+            margin: 0 auto;
+            background: white;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 8px;
+        }
+        
+        .header h1 {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 0;
+            color: #333;
+        }
+        
+        .header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status {
+            font-size: 14px;
+            font-weight: bold;
+            color: #28a745;
+        }
+        
+        .order-summary {
+            margin-bottom: 15px;
+        }
+        
+        .summary-layout {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .left-column {
+            flex: 0 0 38%;
+        }
+        
+        .right-column {
+            flex: 0 0 60%;
+        }
+        
+        .delivery-box {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .delivery-box h4 {
+            margin: 0 0 6px 0;
+            font-size: 12px;
+            color: #333;
+        }
+        
+        .delivery-box p {
+            margin: 0;
+            font-size: 10px;
+            line-height: 1.4;
+        }
+        
+        .instructions-box {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 4px;
+            padding: 8px;
+        }
+        
+        .instructions-box h4 {
+            margin: 0 0 6px 0;
+            font-size: 12px;
+            color: #333;
+        }
+        
+        .instructions-box p {
+            margin: 0;
+            font-size: 10px;
+            line-height: 1.4;
+        }
+        
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        
+        .info-table tr {
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .info-label {
+            padding: 6px 8px;
+            background-color: #f8f9fa;
+            font-weight: bold;
+            width: 35%;
+            border-right: 1px solid #ddd;
+        }
+        
+        .info-value {
+            padding: 6px 8px;
+        }
+        
+        .main-content {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .inventory-column {
+            flex: 0 0 38%;
+        }
+        
+        .colis-column {
+            flex: 0 0 60%;
+        }
+        
+        .section-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 2px;
+        }
+        
+        .product-group {
+            margin-bottom: 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .product-group-header {
+            background-color: #e9ecef;
+            padding: 4px 8px;
+            font-weight: bold;
+            font-size: 11px;
+            color: #495057;
+        }
+        
+        .product-details {
+            padding: 4px 8px;
+            background-color: #fff;
+        }
+        
+        .product-line {
+            margin: 1px 0;
+            font-size: 10px;
+            color: #555;
+            padding-left: 12px;
+        }
+        
+        .colis-list {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        
+        .colis-item {
+            padding: 4px 8px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .colis-item:last-child {
+            border-bottom: none;
+        }
+        
+        .colis-header {
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 3px;
+            font-size: 11px;
+        }
+        
+        .colis-content {
+            color: #666;
+        }
+        
+        .colis-product-line {
+            margin: 1px 0;
+            padding-left: 12px;
+            font-size: 9px;
+        }
+        
+        .totals-section {
+            margin: 15px 0;
+            background-color: #f8f9fa;
+            border: 2px solid #28a745;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        
+        .totals-content {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+        
+        .total-item {
+            font-size: 14px;
+            font-weight: bold;
+            color: #155724;
+            text-align: center;
+        }
+        
+        .verification-section {
+            margin-top: 15px;
+            border-top: 2px solid #333;
+            padding-top: 10px;
+        }
+        
+        .verification-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        
+        .verification-layout {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .verification-column {
+            flex: 1;
+            border: 1px solid #333;
+            padding: 8px;
+        }
+        
+        .verification-section h4 {
+            margin: 0 0 6px 0;
+            font-size: 11px;
+            color: #333;
+            text-align: center;
+        }
+        
+        .checkbox-item {
+            margin: 3px 0;
+            font-size: 10px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .checkbox {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 1px solid #333;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+        
+        .signature-line {
+            border-bottom: 1px solid #333;
+            min-height: 15px;
+            margin: 4px 0;
+            width: 100%;
+        }
+        
+        .signature-item {
+            margin: 6px 0;
+            font-size: 9px;
+        }
+        
+        .signature-item strong {
+            font-size: 10px;
+        }
+        
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 9px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 8px;
+        }
+        
+        .footer p {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="pdf-page">
+        <!-- En-tête avec titre et statut -->
+        <div class="header">
+            <div class="header-flex">
+                <h1>FICHE DE PRODUCTION {{COMMANDE_REF}}</h1>
+                <div class="status">STATUT: {{COMMANDE_STATUS}}</div>
+            </div>
+        </div>
+        
+        <!-- Section récapitulatif commande -->
+        <div class="order-summary">
+            <div class="summary-layout">
+                <!-- Colonne gauche - Adresse de livraison (38%) -->
+                <div class="left-column">
+                    <div class="delivery-box">
+                        <h4>Adresse de livraison</h4>
+                        <p>{{DELIVERY_INFO}}</p>
+                    </div>
+                    <div class="instructions-box">
+                        <h4>Instructions</h4>
+                        <p>{{INSTRUCTIONS}}</p>
+                    </div>
+                </div>
+                
+                <!-- Colonne droite - Infos commande (60%) -->
+                <div class="right-column">
+                    <table class="info-table">
+                        <tr>
+                            <td class="info-label">Date :</td>
+                            <td class="info-value">{{DATE_GENERATION}}</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">Client :</td>
+                            <td class="info-value">{{CLIENT_NAME}}</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">Réf. Chantier :</td>
+                            <td class="info-value">{{REF_CHANTIER}}</td>
+                        </tr>
+                        <tr>
+                            <td class="info-label">Commentaires :</td>
+                            <td class="info-value">{{COMMENTAIRES}}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section principale -->
+        <div class="main-content">
+            <!-- Inventaire produits (38%) -->
+            <div class="inventory-column">
+                <div class="section-title">📦 INVENTAIRE PRODUITS</div>
+                {{INVENTORY_PRODUCTS}}
+            </div>
+            
+            <!-- Liste colis (60%) -->
+            <div class="colis-column">
+                <div class="section-title">📋 LISTE DES COLIS PRÉPARÉS</div>
+                <div class="colis-list">
+                    {{COLIS_LIST}}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section totaux -->
+        <div class="totals-section">
+            <div class="totals-content">
+                <div class="total-item">
+                    <strong>TOTAL COLIS PRÉPARÉS : {{TOTAL_COLIS}} colis</strong>
+                </div>
+                <div class="total-item">
+                    <strong>POIDS TOTAL : {{TOTAL_WEIGHT}} kg</strong>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Section contrôles et signatures -->
+        <div class="verification-section">
+            <div class="verification-title">✅ CONTRÔLES DE PRODUCTION ET SIGNATURES</div>
+            
+            <div class="verification-layout">
+                <!-- Colonne 1: Colisage -->
+                <div class="verification-column">
+                    <h4>COLISAGE FINAL</h4>
+                    <div class="checkbox-item">
+                        <span class="checkbox"></span>
+                        <span>_____ Palettes = _____ Colis</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <span class="checkbox"></span>
+                        <span>_____ Fagots = _____ Colis</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <span class="checkbox"></span>
+                        <span>_____ Colis vrac</span>
+                    </div>
+                    <div style="margin-top: 8px; font-weight: bold; font-size: 11px; text-align: center;">
+                        TOTAL: _____ COLIS
+                    </div>
+                </div>
+                
+                <!-- Colonne 2: Contrôles -->
+                <div class="verification-column">
+                    <h4>CONTRÔLES QUALITÉ</h4>
+                    <div class="checkbox-item">
+                        <span class="checkbox"></span>
+                        <span>Dimensions conformes</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <span class="checkbox"></span>
+                        <span>Couleurs conformes</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <span class="checkbox"></span>
+                        <span>Quantités vérifiées</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <span class="checkbox"></span>
+                        <span>Étiquetage complet</span>
+                    </div>
+                    <div class="checkbox-item">
+                        <span class="checkbox"></span>
+                        <span>Emballage conforme</span>
+                    </div>
+                </div>
+                
+                <!-- Colonne 3: Signatures -->
+                <div class="verification-column">
+                    <h4>RESPONSABLES</h4>
+                    <div class="signature-item">
+                        <strong>Production:</strong><br>
+                        <div class="signature-line"></div>
+                    </div>
+                    <div class="signature-item">
+                        <strong>Contrôle:</strong><br>
+                        <div class="signature-line"></div>
+                    </div>
+                    <div class="signature-item">
+                        <strong>Expédition:</strong><br>
+                        <div class="signature-line"></div>
+                    </div>
+                    <div class="signature-item">
+                        <strong>Bobines ID:</strong> __________
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Pied de page -->
+        <div class="footer">
+            <p>Fiche générée le {{DATE_GENERATION}} à {{TIME_GENERATION}} | Total: {{TOTAL_PIECES}} pcs commandées | Document confidentiel</p>
+        </div>
+    </div>
+</body>
+</html>
