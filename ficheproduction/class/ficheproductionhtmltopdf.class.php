@@ -203,6 +203,18 @@ class FicheProductionHTMLToPDF
             $manager = new FicheProductionManager($this->db);
             $productionData = $manager->loadColisageData($object->id);
             
+            if ($this->debug && $productionData['success']) {
+                dol_syslog("FicheProductionHTMLToPDF: Debug production data structure:", LOG_DEBUG);
+                foreach ($productionData['colis'] as $i => $colis) {
+                    dol_syslog("  Colis $i: ".count($colis['products'])." products", LOG_DEBUG);
+                    foreach ($colis['products'] as $j => $prod) {
+                        $isLibre = isset($prod['isLibre']) ? ($prod['isLibre'] ? 'LIBRE' : 'STD') : 'UNK';
+                        $prodId = isset($prod['productId']) ? $prod['productId'] : 'NO_ID';
+                        dol_syslog("    Product $j: ID=$prodId, Type=$isLibre", LOG_DEBUG);
+                    }
+                }
+            }
+
             if ($this->debug) {
                 dol_syslog("FicheProductionHTMLToPDF: Production data success: ".($productionData['success'] ? 'YES' : 'NO'), LOG_DEBUG);
                 if ($productionData['success']) {
@@ -759,52 +771,65 @@ class FicheProductionHTMLToPDF
         return $html;
     }
     
-    /**
-     * Generate colis HTML
-     *
-     * @param array $productionData Production data
-     * @return string Colis HTML
-     */
-    private function generateColisHTML($productionData)
-    {
-        $html = '';
-        
-        if (!empty($productionData['colis'])) {
-            foreach ($productionData['colis'] as $index => $colis) {
-                $multiple = isset($colis['multiple']) ? intval($colis['multiple']) : 1;
-                $number = isset($colis['number']) ? $colis['number'] : ($index + 1);
-                $weight = isset($colis['totalWeight']) ? floatval($colis['totalWeight']) : 0;
-                
-                $html .= '<div class="colis-item">';
-                $html .= '<div class="colis-header">';
+/**
+ * Generate colis HTML - VERSION CORRIGÉE
+ *
+ * @param array $productionData Production data
+ * @return string Colis HTML
+ */
+private function generateColisHTML($productionData)
+{
+    $html = '';
+    
+    if (!empty($productionData['colis'])) {
+        foreach ($productionData['colis'] as $index => $colis) {
+            $multiple = isset($colis['multiple']) ? intval($colis['multiple']) : 1;
+            $number = isset($colis['number']) ? $colis['number'] : ($index + 1);
+            $weight = isset($colis['totalWeight']) ? floatval($colis['totalWeight']) : 0;
+            $isLibre = isset($colis['isLibre']) && $colis['isLibre'];
+            
+            $html .= '<div class="colis-item">';
+            $html .= '<div class="colis-header">';
+            if ($isLibre) {
+                $html .= $multiple.' colis libre n°'.$number.' ('.number_format($weight, 1).' Kg/colis)';
+            } else {
                 $html .= $multiple.' colis n°'.$number.' ('.number_format($weight, 1).' Kg/colis)';
-                $html .= '</div>';
-                $html .= '<div class="colis-content">';
-                
-                if (!empty($colis['products'])) {
-                    foreach ($colis['products'] as $product) {
-                        $productName = isset($product['name']) ? $product['name'] : 'Produit';
-                        $quantity = isset($product['quantity']) ? intval($product['quantity']) : 0;
+            }
+            $html .= '</div>';
+            $html .= '<div class="colis-content">';
+            
+            if (!empty($colis['products'])) {
+                foreach ($colis['products'] as $productData) {
+                    $quantity = isset($productData['quantity']) ? intval($productData['quantity']) : 0;
+                    
+                    if (isset($productData['isLibre']) && $productData['isLibre']) {
+                        // Produit libre - utiliser les données sauvegardées
+                        $productName = isset($productData['name']) ? $productData['name'] : 'Produit libre';
+                        $weight = isset($productData['weight']) ? floatval($productData['weight']) : 0;
+                        $html .= '<div class="colis-product-line">• '.$productName.' ('.$quantity.' pcs - '.number_format($weight, 1).'kg/pc)</div>';
+                    } else {
+                        // ✅ CORRECTION : Récupérer les vraies infos produit
+                        $productInfo = $this->getProductInfoForPDF($productData);
+                        $html .= '<div class="colis-product-line">• '.$productInfo['display'].' ('.$quantity.' pcs)</div>';
                         
-                        if (isset($product['isLibre']) && $product['isLibre']) {
-                            // Produit libre
-                            $html .= '<div class="colis-product-line">• '.$productName.' ('.$quantity.' pcs)</div>';
-                        } else {
-                            // Produit standard - essayer de récupérer plus d'infos
-                            $html .= '<div class="colis-product-line">• '.$productName.' ('.$quantity.' pcs)</div>';
+                        if ($this->debug) {
+                            dol_syslog("FicheProductionHTMLToPDF: Product resolved - ID:".$productData['productId']." -> ".$productInfo['display'], LOG_DEBUG);
                         }
                     }
                 }
-                
-                $html .= '</div>';
-                $html .= '</div>';
+            } else {
+                $html .= '<div class="colis-product-line" style="font-style: italic; color: #999;">Colis vide</div>';
             }
-        } else {
-            $html = '<div class="colis-item"><div class="colis-content">Aucun colis préparé</div></div>';
+            
+            $html .= '</div>';
+            $html .= '</div>';
         }
-        
-        return $html;
+    } else {
+        $html = '<div class="colis-item"><div class="colis-content">Aucun colis préparé</div></div>';
     }
+    
+    return $html;
+}
     
     /**
      * Get extrafield value with fallback options
@@ -852,6 +877,100 @@ class FicheProductionHTMLToPDF
         }
     }
     
+/**
+ * ✅ VERSION SIMPLIFIÉE : Uniquement recherche dans commandedet
+ */
+private function getProductInfoForPDF($productData)
+{
+    $productId = isset($productData['productId']) ? intval($productData['productId']) : 0;
+    
+    if ($productId <= 0) {
+        return array(
+            'display' => isset($productData['name']) ? $productData['name'] : 'Produit non identifié',
+            'ref' => '',
+            'weight' => 0
+        );
+    }
+    
+    if ($this->debug) {
+        dol_syslog("FicheProductionHTMLToPDF: Recherche produit pour ligne commande ID: ".$productId, LOG_DEBUG);
+    }
+    
+    // ✅ SEULE STRATÉGIE : Chercher dans les lignes de commande
+    $sql = "SELECT cd.fk_product, cd.qty, p.ref, p.label, p.weight, cd.array_options
+            FROM ".MAIN_DB_PREFIX."commandedet cd
+            LEFT JOIN ".MAIN_DB_PREFIX."product p ON cd.fk_product = p.rowid
+            WHERE cd.rowid = ".intval($productId);
+    
+    $resql = $this->db->query($sql);
+    if ($resql && $this->db->num_rows($resql) > 0) {
+        $obj = $this->db->fetch_object($resql);
+        
+        if ($this->debug) {
+            dol_syslog("FicheProductionHTMLToPDF: Produit trouvé - ligne:".$productId." -> produit:".$obj->fk_product." -> ".$obj->label, LOG_DEBUG);
+        }
+        
+        $displayName = !empty($obj->label) ? $obj->label : $obj->ref;
+        
+        // Ajouter des infos supplémentaires des extrafields
+        $extraInfo = '';
+        if (!empty($obj->array_options)) {
+            $arrayOptions = json_decode($obj->array_options, true);
+            if (is_array($arrayOptions)) {
+                // Couleur
+                $color = '';
+                foreach (array('options_color', 'options_couleur') as $colorField) {
+                    if (isset($arrayOptions[$colorField]) && !empty($arrayOptions[$colorField])) {
+                        $color = $arrayOptions[$colorField];
+                        break;
+                    }
+                }
+                
+                // Dimensions
+                $length = '';
+                $width = '';
+                foreach (array('options_length', 'options_longueur', 'options_long') as $lengthField) {
+                    if (isset($arrayOptions[$lengthField]) && !empty($arrayOptions[$lengthField])) {
+                        $length = $arrayOptions[$lengthField];
+                        break;
+                    }
+                }
+                foreach (array('options_width', 'options_largeur', 'options_larg') as $widthField) {
+                    if (isset($arrayOptions[$widthField]) && !empty($arrayOptions[$widthField])) {
+                        $width = $arrayOptions[$widthField];
+                        break;
+                    }
+                }
+                
+                // Construire les infos supplémentaires
+                if (!empty($color)) {
+                    $extraInfo .= ' - '.$color;
+                }
+                if (!empty($length) && !empty($width)) {
+                    $extraInfo .= ' ('.$length.'×'.$width.')';
+                }
+            }
+        }
+        
+        return array(
+            'display' => $displayName . $extraInfo,
+            'ref' => $obj->ref,
+            'weight' => $obj->weight
+        );
+    }
+    
+    if ($this->debug) {
+        dol_syslog("FicheProductionHTMLToPDF: Ligne de commande non trouvée pour ID: ".$productId, LOG_WARNING);
+    }
+    
+    // ✅ FALLBACK si la ligne de commande n'existe pas
+    return array(
+        'display' => isset($productData['name']) ? $productData['name'] : 'Ligne commande #'.$productId.' (non trouvée)',
+        'ref' => '',
+        'weight' => isset($productData['weight']) ? $productData['weight'] : 0
+    );
+}
+
     /**
      * Convert HTML to PDF using DOMPDF
      *
